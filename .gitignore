@@ -1,0 +1,28 @@
+# Local toolchain binaries and downloads; keep the environment-check source.
+/.tools/*
+!/.tools/checks/
+/.tools/checks/*
+!/.tools/checks/env_check.sv
+
+# Generated simulation outputs and temporary documents.
+/build/
+/tmp/
+*.vvp
+*.vcd
+*.fsdb
+*.log
+simv
+simv.daidir/
+csrc/
+ucli.key
+__pycache__/
+
+# Local configuration and credentials.
+.env
+.env.*
+*.pem
+*.key
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

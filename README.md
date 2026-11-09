@@ -2,6 +2,15 @@
 
 数字电路设计课程 Lab1：Winograd 一维卷积、CORDIC 旋转和双缓冲控制器的 RTL 实现与功能验证。使用 SystemVerilog-2012，支持 Icarus Verilog 本地仿真。
 
+## 第 11 组提交版本（2026-11-09）
+
+按课程官网发布的测试包在 XLab 以 VCS 运行三项原版测试，均通过。CORDIC 已使用课程具名端口，含采样沿的第 16 沿出数。Bonus 采用 2D Winograd；每个扁平总线的最低 32 位为左上元素。独立二维 Golden Model 位于 `lab1_files/winograd_2d/verification/`，在仓库根目录可运行：
+
+```sh
+vcs -full64 -sverilog -top winograd_2d_selfcheck_tb lab1_files/winograd_2d/src/*.v lab1_files/winograd_2d/verification/*.sv -R
+```
+
+[实验报告](output/pdf/Lab1_Report_team11.pdf) · [课程网提交包](output/pdf/Lab1_Report_team11.zip)
 ## 项目内容
 
 | 任务 | 实现 | 说明 |

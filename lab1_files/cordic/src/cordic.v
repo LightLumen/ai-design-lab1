@@ -1,21 +1,21 @@
 `timescale 1ns/1ps
 module cordic (
-    input  logic               clk,
-    input  logic signed [15:0] Xin,
-    input  logic signed [15:0] Yin,
-    input  logic        [31:0] angle,
-    output logic signed [15:0] COSout,
-    output logic signed [15:0] SINout,
+    input  logic               clock,
+    input  logic signed [15:0] xstart,
+    input  logic signed [15:0] ystart,
+    input  logic        [31:0] zangle,
+    output logic signed [15:0] xout,
+    output logic signed [15:0] yout,
     output logic               done
 );
-    // One coarse-rotation boundary plus sixteen micro-rotation boundaries.
+    // Combinational coarse rotation followed by sixteen registered rotations.
     // x/y are signed 32-bit fixed point with twelve fractional bits.
-    logic signed [31:0] x_q [0:15];
-    logic signed [31:0] y_q [0:15];
-    logic signed [32:0] z_q [0:15];
+    wire signed [31:0] x_q [0:15];
+    wire signed [31:0] y_q [0:15];
+    wire signed [32:0] z_q [0:15];
     logic signed [31:0] x_extended, y_extended, x_fixed, y_fixed;
     logic signed [32:0] angle_extended;
-    logic [16:0] warm_q;
+    logic [15:0] warm_q;
 
     localparam logic signed [32:0] HALF_TURN = 33'sh080000000;
 
@@ -43,50 +43,43 @@ module cordic (
     endfunction
 
     // Widen before shifting or negating: -16'sh8000 cannot fit in 16 bits.
-    assign x_extended = $signed({{16{Xin[15]}}, Xin});
-    assign y_extended = $signed({{16{Yin[15]}}, Yin});
+    assign x_extended = $signed({{16{xstart[15]}}, xstart});
+    assign y_extended = $signed({{16{ystart[15]}}, ystart});
     assign x_fixed = x_extended <<< 5'd12;
     assign y_fixed = y_extended <<< 5'd12;
-    assign angle_extended = $signed({1'b0, angle});
+    assign angle_extended = $signed({1'b0, zangle});
 
-    // E0: reduce to [-90,90) degrees with an optional half-turn vector flip.
-    always_ff @(posedge clk) begin
-        if ((angle >= 32'h40000000) && (angle < 32'hc0000000)) begin
-            x_q[0] <= -x_fixed;
-            y_q[0] <= -y_fixed;
-            z_q[0] <= angle_extended - HALF_TURN;
-        end else begin
-            x_q[0] <= x_fixed;
-            y_q[0] <= y_fixed;
-            if (angle >= 32'hc0000000)
-                // Here angle-2^32 is negative: explicitly encode its sign.
-                // Positive 2^32 itself does NOT fit in signed 33 bits.
-                z_q[0] <= $signed({1'b1, angle});
-            else
-                z_q[0] <= angle_extended;
-        end
-        // No reset/initialization: startup data and done are unspecified.
-        // After seventeen clock edges all bits have become known ones.
-        warm_q <= {warm_q[15:0], 1'b1};
-    end
-    assign done = warm_q[16];
+    // Coarse rotation is combinational so the first sampled edge performs i=0.
+    wire flip = zangle[31] ^ zangle[30];
+    assign x_q[0] = flip ? -x_fixed : x_fixed;
+    assign y_q[0] = flip ? -y_fixed : y_fixed;
+    assign z_q[0] = flip ? angle_extended - HALF_TURN
+                         : $signed({zangle[31], zangle});
 
+    always_ff @(posedge clock)
+        warm_q <= {warm_q[14:0], 1'b1};
+    assign done = warm_q[15];
     // E1..E15: iterations i=0..14, statically unrolled. Each shift is wiring.
     generate
         for (genvar i = 0; i < 15; i = i + 1) begin : g_rotate
             localparam logic signed [32:0] A = atan_bam(i);
             logic signed [31:0] x_shift, y_shift;
+            logic signed [31:0] x_reg, y_reg;
+            logic signed [32:0] z_reg;
+            assign x_q[i+1] = x_reg;
+            assign y_q[i+1] = y_reg;
+            assign z_q[i+1] = z_reg;
             assign x_shift = $signed(x_q[i]) >>> i;
             assign y_shift = $signed(y_q[i]) >>> i;
-            always_ff @(posedge clk) begin
+            always_ff @(posedge clock) begin
                 if (!z_q[i][32]) begin
-                    x_q[i+1] <= x_q[i] - y_shift;
-                    y_q[i+1] <= y_q[i] + x_shift;
-                    z_q[i+1] <= z_q[i] - A;
+                    x_reg <= x_q[i] - y_shift;
+                    y_reg <= y_q[i] + x_shift;
+                    z_reg <= z_q[i] - A;
                 end else begin
-                    x_q[i+1] <= x_q[i] + y_shift;
-                    y_q[i+1] <= y_q[i] - x_shift;
-                    z_q[i+1] <= z_q[i] + A;
+                    x_reg <= x_q[i] + y_shift;
+                    y_reg <= y_q[i] - x_shift;
+                    z_reg <= z_q[i] + A;
                 end
             end
         end
@@ -107,9 +100,9 @@ module cordic (
 
     // E16: final i=15 rotation and output quantization share one boundary.
     // No extra x16/y16 register stage, and no duplicate gain compensation.
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clock) begin
         // Intentional truncation: wrap modulo 2^16, no saturation.
-        COSout <= $signed(x_integer[15:0]);
-        SINout <= $signed(y_integer[15:0]);
+        xout <= $signed(x_integer[15:0]);
+        yout <= $signed(y_integer[15:0]);
     end
 endmodule

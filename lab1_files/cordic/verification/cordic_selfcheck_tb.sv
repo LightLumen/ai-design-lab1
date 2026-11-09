@@ -6,8 +6,8 @@ module cordic_selfcheck_tb;
     wire signed [15:0] COSout, SINout;
     wire done;
     cordic dut (
-        .clk(clk), .Xin(Xin), .Yin(Yin), .angle(angle),
-        .COSout(COSout), .SINout(SINout), .done(done)
+        .clock(clk), .xstart(Xin), .ystart(Yin), .zangle(angle),
+        .xout(COSout), .yout(SINout), .done(done)
     );
     always #2 clk = ~clk;
 
@@ -54,12 +54,12 @@ module cordic_selfcheck_tb;
         abs_real = value < 0.0 ? -value : value;
     endfunction
 
-    // Sixteen queued edges plus the output edge implement E0 -> E16.
-    logic [31:0] model_q [0:15];
-    logic [31:0] angle_q [0:15];
-    logic signed [15:0] xin_q [0:15], yin_q [0:15];
-    real rx_q [0:15], ry_q [0:15];
-    integer tag_q [0:15];
+    // Fifteen queued samples plus the current output edge give 16 edges.
+    logic [31:0] model_q [0:14];
+    logic [31:0] angle_q [0:14];
+    logic signed [15:0] xin_q [0:14], yin_q [0:14];
+    real rx_q [0:14], ry_q [0:14];
+    integer tag_q [0:14];
     integer cycles = 0, checked = 0, numeric_checked = 0, wrapped_checked = 0;
     integer stage;
     logic [31:0] expected_bits, expected_angle;
@@ -71,12 +71,12 @@ module cordic_selfcheck_tb;
     always @(posedge clk) begin
         cycles = cycles + 1;
         // Capture the old queue tail before shifting this edge's input in.
-        expected_bits = model_q[15];
-        expected_angle = angle_q[15];
-        expected_xin = xin_q[15]; expected_yin = yin_q[15];
-        expected_rx = rx_q[15]; expected_ry = ry_q[15];
-        expected_tag = tag_q[15];
-        for (stage = 15; stage > 0; stage = stage - 1) begin
+        expected_bits = model_q[14];
+        expected_angle = angle_q[14];
+        expected_xin = xin_q[14]; expected_yin = yin_q[14];
+        expected_rx = rx_q[14]; expected_ry = ry_q[14];
+        expected_tag = tag_q[14];
+        for (stage = 14; stage > 0; stage = stage - 1) begin
             model_q[stage] = model_q[stage-1];
             angle_q[stage] = angle_q[stage-1];
             xin_q[stage] = xin_q[stage-1]; yin_q[stage] = yin_q[stage-1];
@@ -93,9 +93,9 @@ module cordic_selfcheck_tb;
         rx_q[0] = gain * (xr * $cos(theta) - yr * $sin(theta));
         ry_q[0] = gain * (xr * $sin(theta) + yr * $cos(theta));
 
-        // The no-reset interface gives no guarantee during the first 16 edges.
+        // The no-reset interface gives no guarantee during the first 15 edges.
         #1;
-        if (cycles >= 17) begin
+        if (cycles >= 16) begin
             if (done !== 1'b1 || {COSout, SINout} !== expected_bits)
                 $fatal(1, "cycle=%0d time=%0t input_edge=%0d Xin=%0d Yin=%0d angle=%08h expected=(%0d,%0d,done=1) actual=(%0d,%0d,done=%b)",
                        cycles, $time, expected_tag, expected_xin, expected_yin,
@@ -190,7 +190,7 @@ module cordic_selfcheck_tb;
         end
         repeat (18) drive(16'sd0, 16'sd0, 32'h00000000);
         @(negedge clk);
-        if (checked != 1774 || cycles != 1790 || numeric_checked < 500 || wrapped_checked < 100)
+        if (checked != 1775 || cycles != 1790 || numeric_checked < 500 || wrapped_checked < 100)
             $fatal(1, "coverage failure cycles=%0d checked=%0d numeric=%0d wrapped=%0d",
                    cycles, checked, numeric_checked, wrapped_checked);
         $display("ALL PASS: CORDIC selfcheck checked=%0d numeric=%0d wrapped=%0d cycles=%0d max_error_x=%0.6f max_error_y=%0.6f",
